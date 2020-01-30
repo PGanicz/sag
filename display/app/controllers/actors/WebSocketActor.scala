@@ -43,7 +43,7 @@ class WebSocketActor(channel: ActorRef, clientRequestHandlerActor: ActorRef) ext
 
   implicit object CollusionWriter extends Writes[Collision] with DefaultWrites {
     def writes(collusion: Collision) = Json.obj(
-      "collusions" -> Json.arr(collusion.collision.foldLeft(List.empty[Json.JsValueWrapper])((arr, position) => Json.obj(
+      "collision" -> Json.arr(collusion.collision.foldLeft(List.empty[Json.JsValueWrapper])((arr, position) => Json.obj(
         "x" -> Json.toJson(position._1.intValue()),
         "y" -> Json.toJson(position._2.intValue())
       ) :: arr): _*))
@@ -59,11 +59,11 @@ class WebSocketActor(channel: ActorRef, clientRequestHandlerActor: ActorRef) ext
       val positions = position.state.values.map(v => (v.head._1, v.head._2))
       val duplicatesItem = positions groupBy { x => x } filter { case (_, lst) => lst.size > 1 } keys
 
+      channel ! Json.stringify(Json.toJson(position))
+
       if (duplicatesItem.nonEmpty) {
         channel ! Json.stringify(Json.toJson(Collision(duplicatesItem)))
       }
-
-      channel ! Json.stringify(Json.toJson(position))
     case config@BuildingMapConfiguration(_) =>
       log.info("Config to push {} ", config)
       channel ! Json.stringify(Json.toJson(config))

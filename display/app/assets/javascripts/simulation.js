@@ -4,6 +4,7 @@ var websocket = {};
 var config = {};
 var screen = {};
 var states = [];
+var collisions = [];
 window.onbeforeunload = function () {
     websocket.onclose = function () {};
     websocket.close();
@@ -46,10 +47,32 @@ function onMessage(evt) {
     console.log(evt.data);
 }
 function handle(json) {
-    if(json.hasOwnProperty('config')) handleConfig(json);
-    if(json.hasOwnProperty('state')) {
+    if (json.hasOwnProperty('config')) handleConfig(json);
+    if (json.hasOwnProperty('state')) {
         handleState(json);
         states.push(json)
+    }
+    if (json.hasOwnProperty("collision")) {
+        handleCollision(json)
+    }
+}
+
+function handleCollision(json) {
+    for (var i = 0; i < json.collision.length; i++) {
+        var collision = json.collision[i];
+        var size_x = config.x+1;
+        var size_y = config.y+1;
+        var width = screen.width / size_x;
+        var height = screen.height / size_y;
+
+        var ctx = document.getElementById("platform")
+            .getContext("2d");
+        ctx.beginPath();
+        ctx.arc(collision.x * width - width /2 , collision.y * height-height /2, width/2, 0, 2 * Math.PI);
+        ctx.fillStyle = 'red';
+        ctx.fill();
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = '#003300';
     }
 }
 
@@ -91,6 +114,7 @@ function drawMap(){
             if (config.config[i][j] === "Wall") {
                 var c = document.getElementById("platform");
                 var ctx = c.getContext("2d");
+                ctx.lineWidth = 5;
                 ctx.beginPath();
                 ctx.rect(j * width , i * height, width, height);
                 ctx.stroke();
