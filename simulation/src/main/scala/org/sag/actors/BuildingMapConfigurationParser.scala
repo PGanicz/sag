@@ -1,8 +1,5 @@
 package org.sag.actors
 
-import akka.actor.{ActorSystem, Props}
-import akka.cluster.Cluster
-import com.typesafe.config.ConfigFactory
 import org.sag.{BuildingMapConfiguration, MapElement}
 
 import scala.language.postfixOps
@@ -18,6 +15,7 @@ object BuildingMapConfigurationParser {
       .map(line => line.toCharArray.map {
         case ' ' => MapElement.Space
         case '#' => MapElement.Wall
+        case 'E' => MapElement.Exit
       })
       .toArray
     source.close()

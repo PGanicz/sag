@@ -3,7 +3,7 @@ package org.sag
 import akka.actor.{ActorSystem, Props}
 import akka.cluster.Cluster
 import com.typesafe.config.ConfigFactory
-import org.sag.actors.{BuildingGeometry, BuildingMapConfigurationParser, BuildingMapGeometry, Display, Occupant}
+import org.sag.actors.{BuildingGeometry, BuildingMapConfigurationParser, BuildingMapGeometry, Display, Occupant, Reaper}
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -17,9 +17,10 @@ object Main extends App {
   Cluster(system).join(joinAddress)
   var display = system.actorOf(Display.props(config), "display")
 
+  system.actorOf(Props[Reaper], "reaper")
   system.actorOf(Props(new BuildingGeometry(display, 30)), "platform")
   for (i <- 1 to 30) {
-    system.actorOf(Props(new Occupant(mapGeometry.getRandomPoint(), mapGeometry.getRandomPoint(), 10, mapGeometry)), s"Pedestrian_${i}")
+    system.actorOf(Props(new Occupant(mapGeometry.getRandomEmptyPoint(), mapGeometry.getRandomExit(), 10, mapGeometry, 0.01)), s"Pedestrian_${i}")
   }
 
   Await.result(system.whenTerminated, 1 day)

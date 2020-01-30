@@ -1,6 +1,7 @@
 package org.sag.model
 
 import akka.actor.ActorRef
+import org.sag.RemoteApi.Point
 
 /**
  * @author Piotr Ganicz
@@ -19,12 +20,12 @@ object Protocol {
 
   final case class PedestrianDeployed()
 
-  final case class TargetReached()
+  final case class TargetReached(target: Point)
 
   final case class PedestrianRegistered()
 
   final case class Collision()
   final case class Tick()
-  final case class ActorKilled()
+  final case class ActorKilled(field: Point)
 
 }

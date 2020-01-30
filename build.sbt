@@ -20,7 +20,7 @@ lazy val simulation = project
   .settings(libraryDependencies ++= Seq(
     "com.typesafe.akka" %% "akka-actor" % "2.6.1",
     "com.typesafe.akka" %% "akka-cluster-tools" % "2.6.1",
-      "com.typesafe.akka"     %% "akka-remote" % "2.6.1",
+    "com.typesafe.akka"     %% "akka-remote" % "2.6.1",
     "com.typesafe.akka"     %% "akka-persistence" % "2.6.1"
   ) )
 lazy val display = (project in file("display"))

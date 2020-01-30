@@ -11,8 +11,12 @@ object RemoteApi {
   type Point = (Int, Int)
 }
 
+case class ActorDead(occupant: ActorRef, position: Point)
+
 case class DisplayState(state: Map[String, List[Point]] = Map.empty) {
   def update(event: PositionChangedEvent) = copy(state + (event.occupant -> (event.position :: state.getOrElse(event.occupant, List.empty))))
+
+  def update(event: ActorDead) = copy(state.-(event.occupant.path.name))
 }
 
 case class DisplayFinalPositions(displayState: DisplayState)
@@ -23,7 +27,7 @@ case class PositionChangedEvent(occupant: String, position: Point)
 
 object MapElement extends Enumeration with Serializable {
   type MapElement = Value
-  val Space, Wall = Value
+  val Space, Wall, Exit = Value
 }
 case class BuildingMapConfiguration(map: Array[Array[MapElement]])
 

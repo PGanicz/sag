@@ -20,13 +20,15 @@ class WebSocketActor(channel: ActorRef, clientRequestHandlerActor: ActorRef) ext
       "state" -> Json.arr(displayState.state.foldLeft(List.empty[Json.JsValueWrapper])((arr, state) => Json.obj(
         "name" -> Json.toJson(state._1),
         "x" -> Json.toJson(state._2.head._1.intValue()),
-        "y" -> Json.toJson(state._2.head._1.intValue())
+        "y" -> Json.toJson(state._2.head._2.intValue())
       ) :: arr): _*))
   }
 
   implicit object BuildingMapConfigurationWriter extends Writes[BuildingMapConfiguration] with DefaultWrites {
     def writes(mapConfig: BuildingMapConfiguration) = Json.obj(
-      "config" -> mapConfig.map.mkString("\n")
+      "config" -> mapConfig.map,
+      "x" -> Json.toJson(mapConfig.map(0).length),
+      "y" -> Json.toJson(mapConfig.map.length)
       )
   }
 

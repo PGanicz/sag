@@ -1,11 +1,12 @@
 package org.sag.actors
 
-import akka.actor.{ActorLogging, ActorRef, Props}
-import akka.cluster.pubsub.DistributedPubSub
+import akka.actor.{ActorLogging, ActorRef, PoisonPill, Props}
+import akka.cluster.pubsub.{DistributedPubSub, DistributedPubSubMediator}
 import akka.cluster.pubsub.DistributedPubSubMediator.{Subscribe, SubscribeAck}
 import akka.persistence.{PersistentActor, SnapshotOffer, SnapshotSelectionCriteria}
 import org.sag.RemoteApi.Point
-import org.sag.{BuildingMapConfiguration, DisplayFinalPositions, DisplayRegistered, DisplayState, FinalPositionsDisplayed, PositionChangedEvent, RegisterDisplay}
+import org.sag.actors.Reaper.WatchMe
+import org.sag.{ActorDead, BuildingMapConfiguration, DisplayFinalPositions, DisplayRegistered, DisplayState, FinalPositionsDisplayed, PositionChangedEvent, RegisterDisplay}
 
 import scala.concurrent.duration._
 import scala.language.postfixOps
@@ -20,8 +21,12 @@ class Display(config: BuildingMapConfiguration) extends PersistentActor with Act
   import org.sag.actors.Display._
 
   case object TakeSnapshot
+  case object PrintMap
 
   case object FailureCheck
+  implicit val executor = context.dispatcher
+
+  val buildingConfig =  (new BuildingMapGeometry(BuildingMapConfigurationParser.parseFile("building.txt")))
 
   val mediator = DistributedPubSub(context.system).mediator
 
@@ -29,29 +34,28 @@ class Display(config: BuildingMapConfiguration) extends PersistentActor with Act
 
   var remoteDisplay: Option[ActorRef] = None
 
-  var nasa: ActorRef = _
-
-  def scheduleFailure = false
+  var stop = false
+  val snapShotInterval = 1000
 
   def scheduleSnapshot = true
 
-  def initialDelayForSnapshot = 100 milliseconds
+  def initialDelayForSnapshot = 5 second
 
-  def scheduledSnapshots = 100 milliseconds
+  def scheduledSnapshots = 5 second
 
-  def initialDelayForFailureCheck = 100 milliseconds
+  def initialDelayForFailureCheck =5 second
 
-  def scheduledFailureCheck = 100 milliseconds
+  def scheduledFailureCheck = 5 second
 
   mediator ! Subscribe("remoteDisplay", self)
+  mediator ! DistributedPubSubMediator.Publish("reaper", WatchMe(self))
 
   override def preStart() {
     deleteSnapshots(SnapshotSelectionCriteria())
     deleteMessages(Long.MaxValue)
 
-    implicit val executor = context.dispatcher
-    if (scheduleSnapshot) context.system.scheduler.schedule(initialDelayForSnapshot, scheduledSnapshots, self, TakeSnapshot)
-
+    context.system.scheduler.scheduleOnce(initialDelayForSnapshot, self, TakeSnapshot)
+    context.system.scheduler.scheduleOnce(100 milliseconds, self, PrintMap)
     super.preStart()
   }
 
@@ -59,7 +63,6 @@ class Display(config: BuildingMapConfiguration) extends PersistentActor with Act
     case event@PositionChangedEvent(pedestrian, pedestrianPosition) =>
       log.info(s"Register $pedestrianPosition to ${pedestrian}")
       pedestrianPositions = pedestrianPositions.update(event)
-
       remoteDisplay match {
         case Some(display) => display ! pedestrianPositions
         case None =>
@@ -79,28 +82,35 @@ class Display(config: BuildingMapConfiguration) extends PersistentActor with Act
       remoteDisplay = Some(display)
       log.info ("Remote display registration")
       display ! DisplayRegistered(config)
+    case event@ActorDead(ref, point) => {
+        pedestrianPositions = pedestrianPositions.update(event)
+    }
     case RegisterPosition(pedestrian, pedestrianPosition) =>
       persist(PositionChangedEvent(pedestrian.path.name, pedestrianPosition))(updateState)
-    case FinalPositionsDisplayed =>
-      nasa ! PositionsDisplayed
     case ShowPositions =>
       pedestrianPositions.state.foreach {
         case (pedestrian, position :: history) => log.info(s"Last known position of ${pedestrian} is $position. History[$history]")
         case _ =>
       }
-
       remoteDisplay match {
         case Some(display) =>
-          nasa = sender
           log.info(s"sending final !!!!! ${display}")
           display ! DisplayFinalPositions(pedestrianPositions)
         case None =>
           sender ! PositionsDisplayed
       }
-
+    case PrintMap =>
+      buildingConfig.printMap(pedestrianPositions)
+      if (!stop) {
+        context.system.scheduler.scheduleOnce(100 milliseconds, self, PrintMap)
+      }
+    case SimulationEnd =>
+      stop = true
+      self ! PoisonPill
     case TakeSnapshot =>
       log.info("Taking snapshot...")
       saveSnapshot(pedestrianPositions)
+      context.system.scheduler.scheduleOnce(initialDelayForSnapshot, self, TakeSnapshot)
     case Exception =>
       throw new Exception("Some really serious problem!");
   }
@@ -122,4 +132,5 @@ object Display {
 
   case class RegisterPosition(pedestrian: ActorRef, position: Point)
 
+  case object SimulationEnd
 }

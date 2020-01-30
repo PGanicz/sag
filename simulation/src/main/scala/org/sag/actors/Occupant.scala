@@ -11,7 +11,7 @@ import scala.language.postfixOps
 import scala.util.Random
 
 
-class Occupant(var actualPosition: Point, targetPosition: Point, var health: Int, mapGeometry: BuildingMapGeometry) extends Actor with ActorLogging {
+class Occupant(var actualPosition: Point, targetPosition: Point, var health: Int, mapGeometry: BuildingMapGeometry, wrongWayChance: Double) extends Actor with ActorLogging {
 
   import context.dispatcher
 
@@ -42,7 +42,7 @@ class Occupant(var actualPosition: Point, targetPosition: Point, var health: Int
       calculateNewActionList()
       publishPosition()
     case NextStep =>
-      if (actions.nonEmpty ) {
+      if (actions.nonEmpty) {
         var nextAction = actions.head
         actions = actions.drop(1)
         actualPosition = computeNextPosition(nextAction)
@@ -56,8 +56,8 @@ class Occupant(var actualPosition: Point, targetPosition: Point, var health: Int
       health -= 1
       if (health == 0) {
         log.info(s"Collision: pedestrian is dead")
-        mediator ! Publish("position", ActorKilled)
-        self ! PoisonPill
+        mediator ! Publish("position", ActorKilled(actualPosition))
+        context.stop(self)
       } else {
         actualPosition = mapGeometry.getRandomSurrounding(actualPosition)
         calculateNewActionList()
@@ -67,17 +67,27 @@ class Occupant(var actualPosition: Point, targetPosition: Point, var health: Int
     case MoveAccepted =>
       if (actualPosition == targetPosition) {
         log.info("Pedestrian reached the target")
-        mediator ! Publish("position", TargetReached)
-        self ! PoisonPill
+        mediator ! Publish("position", TargetReached(targetPosition))
+        context.stop(self)
+      } else if (actions.isEmpty) {
+        calculateNewActionList()
       }
       self ! NextStep
   }
 
   def calculateNewActionList(): Unit = {
-    log.info(s"Calculating new from ${actualPosition} to ${targetPosition}")
-    mapGeometry.astar(actualPosition, targetPosition) match {
-      case Some(list) => actions = list
-      case None => actions = List()
+    log.info(s"Calculating new path from ${actualPosition} to ${targetPosition}")
+    if (Random.nextGaussian < wrongWayChance) {
+      val tmpTarget = mapGeometry.getRandomEmptyPoint();
+      mapGeometry.astar(actualPosition, tmpTarget) match {
+        case Some(list) => actions = list.take(4)
+        case None => actions = List()
+      }
+    } else {
+      mapGeometry.astar(actualPosition, targetPosition) match {
+        case Some(list) => actions = list
+        case None => actions = List()
+      }
     }
   }
 

@@ -20,7 +20,7 @@ class Application @Inject()(cc: ControllerComponents)(implicit mat: Materializer
   val serverconfig = ConfigFactory.load.getConfig("simulation")
   val serverHost = serverconfig.getString("akka.remote.artery.canonical.hostname")
   val serverPort = serverconfig.getString("akka.remote.artery.canonical.port")
-  val address = Address("akka.tcp", "emergency", serverHost, serverPort.toInt)
+  val address = Address("akka", "emergency", serverHost, serverPort.toInt)
   var clientRequestHandler: ActorRef = _
 
   Cluster(system).join(address)

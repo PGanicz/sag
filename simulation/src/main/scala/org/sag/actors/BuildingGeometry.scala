@@ -1,12 +1,13 @@
 package org.sag.actors
 
 import akka.actor.{Actor, ActorLogging, ActorRef, PoisonPill}
-import akka.cluster.pubsub.DistributedPubSub
-import akka.cluster.pubsub.DistributedPubSubMediator.{Subscribe, SubscribeAck}
-import org.sag.RegisterDisplay
+import akka.cluster.pubsub.{DistributedPubSub, DistributedPubSubMediator}
+import akka.cluster.pubsub.DistributedPubSubMediator.{Publish, Subscribe, SubscribeAck}
 import org.sag.RemoteApi.Point
-import org.sag.actors.Display.RegisterPosition
+import org.sag.actors.Display.{RegisterPosition, SimulationEnd}
+import org.sag.actors.Reaper.WatchMe
 import org.sag.model.Protocol._
+import org.sag.{ActorDead, RegisterDisplay}
 
 import scala.collection.mutable.ListBuffer
 
@@ -14,7 +15,7 @@ import scala.collection.mutable.ListBuffer
  * @author Piotr Ganicz
  */
 class BuildingGeometry(display: ActorRef, numberOfPedestrians: Int) extends Actor with ActorLogging {
-  val mediator = DistributedPubSub(context.system).mediator
+    val mediator = DistributedPubSub(context.system).mediator
 
 
   var pedestrianPositions = Map.empty[ActorRef, Point]
@@ -24,13 +25,7 @@ class BuildingGeometry(display: ActorRef, numberOfPedestrians: Int) extends Acto
 
   mediator ! Subscribe("position", self)
   mediator ! Subscribe("registration", self)
-  mediator ! Subscribe("remoteDisplay", self)
-
-  context become displayRegister
-
-  def displayRegister: Receive = {
-    case RegisterDisplay(_) => context become receive
-  }
+  mediator ! DistributedPubSubMediator.Publish("reaper", WatchMe(self))
 
   def receive: Receive = {
     case SubscribeAck(Subscribe("position", None, _)) => log.info("Subscribed to position topic")
@@ -50,13 +45,15 @@ class BuildingGeometry(display: ActorRef, numberOfPedestrians: Int) extends Acto
         display ! RegisterPosition(publisher, pedestrianPosition)
         publisher ! MoveAccepted
       }
-    case TargetReached =>
+    case TargetReached(point) =>
       targetReached += 1
       pedestrianPositions = pedestrianPositions - sender()
+      display ! RegisterPosition(sender(), point)
       showAfterSimulationStats()
-    case ActorKilled =>
+    case ActorKilled(point) =>
       pedestrianPositions = pedestrianPositions - sender()
       deadActors += 1
+      display ! ActorDead(sender(),point)
       showAfterSimulationStats()
     case RegisterPedestrian(pedestrian: ActorRef) =>
       pedestrian ! PedestrianRegistered
@@ -65,11 +62,12 @@ class BuildingGeometry(display: ActorRef, numberOfPedestrians: Int) extends Acto
         pedestrians.foreach(entity => entity ! DeployPedestrian)
       }
   }
+
   def showAfterSimulationStats(): Unit = {
     if (targetReached + deadActors == pedestrians.size) {
       log.info(s"All targets reached. Deaths: ${deadActors} Reached: ${targetReached}")
       self ! PoisonPill
-      context.system.terminate()
+      display ! SimulationEnd
     }
   }
 }

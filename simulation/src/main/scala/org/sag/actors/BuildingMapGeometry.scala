@@ -2,7 +2,7 @@ package org.sag.actors
 
 import org.sag.RemoteApi.Point
 import org.sag.astar.{AStar, Engine}
-import org.sag.{BuildingMapConfiguration, MapElement}
+import org.sag.{BuildingMapConfiguration, DisplayState, MapElement}
 
 import scala.util.Random
 
@@ -60,18 +60,62 @@ class BuildingMapGeometry(config: BuildingMapConfiguration) {
     engine.valid(state)
   }
 
-  def getRandomPoint(): Point = {
+  def getRandomExit(): Point = {
+    val exists = getExits()
+    exists(Random.nextInt(exists.length))
+  }
+
+  def getRandomEmptyPoint(): Point = {
     var point = (Random.nextInt(config.map(0).length), Random.nextInt(config.map.length))
     while (!valid(point)) {
       point = (Random.nextInt(config.map(0).length), Random.nextInt(config.map.length))
     }
     point
   }
+
   def getRandomSurrounding(point: Point): Point = {
     var newPoint = point match {case (x,y) => (x+Random.nextInt(2) - 1, y + Random.nextInt(2) - 1)}
     while (!valid(newPoint)) {
       newPoint = point match {case (x,y) => (x+Random.nextInt(2) - 1, y + Random.nextInt(2) - 1)}
     }
     newPoint
+  }
+
+  def getExits(): List[Point] = {
+    var result = List.empty[Point]
+    for (y <- config.map.indices; x <- config.map(0).indices) {
+      config.map(y)(x) match {
+        case MapElement.Exit => result = (x, y) :: result
+        case _ =>
+      }
+    }
+    result
+  }
+
+  def printMap(displayState: DisplayState): Unit = {
+    for (y <- config.map.indices) {
+      for (x <- config.map(0).indices) {
+        config.map(y)(x) match {
+          case MapElement.Wall => print('#')
+          case MapElement.Space => {
+            var found = false
+            for ((occupantName, list) <- displayState.state) {
+              if (list.nonEmpty && list.head == (x,y) && !found) {
+                print("o")
+                found = true
+              }
+            }
+            if (!found) {
+              print (" ")
+            }
+          }
+          case MapElement.Exit => print("E")
+        }
+      }
+      print("\n")
+    }
+    for ((key, list) <- displayState.state) {
+        println (s"${key} -> ${list.head}")
+    }
   }
 }
